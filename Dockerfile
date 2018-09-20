@@ -13,7 +13,7 @@
 FROM openshift/origin-release:golang-1.10
 COPY . /go/src/github.com/openshift/builder
 RUN cd /go/src/github.com/openshift/builder && \
-    go build -o openshift-builder ./cmd
+    go build -o openshift-builder -tags "containers_image_docker_daemon_stub containers_image_openpgp containers_image_ostree_stub exclude_graphdriver_btrfs exclude_graphdriver_devicemapper exclude_graphdriver_zfs" ./cmd
 
 FROM docker.io/library/centos:7
 LABEL io.k8s.display-name="OpenShift Origin Builder" \
