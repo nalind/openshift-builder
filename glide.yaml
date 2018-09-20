@@ -84,3 +84,6 @@ import:
   - pkg/kubectl/cmd/templates
   - pkg/kubectl/cmd/util
   - pkg/util/interrupt
+# we need some of the newer constants
+- package: golang.org/x/sys
+  version: master
