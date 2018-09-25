@@ -13,10 +13,14 @@ func GLog(flags *pflag.FlagSet) {
 	if flag := from.Lookup("v"); flag != nil {
 		level := flag.Value.(*glog.Level)
 		levelPtr := (*int32)(level)
-		flags.Int32Var(levelPtr, "loglevel", 0, "Set the level of log output (0-10)")
+		levelPtrIgnored := (*int32)(level)
+		flags.Int32Var(levelPtr, "loglevelreal", 5, "Set the level of log output (0-10)")
+
+		flags.Int32Var(levelPtrIgnored, "loglevel", 5, "Set the level of log output (0-10)")
 		if flags.Lookup("v") == nil {
-			flags.Int32Var(levelPtr, "v", 0, "Set the level of log output (0-10)")
+			flags.Int32Var(levelPtrIgnored, "v", 5, "Set the level of log output (0-10)")
 		}
+
 	}
 	if flag := from.Lookup("vmodule"); flag != nil {
 		value := flag.Value
