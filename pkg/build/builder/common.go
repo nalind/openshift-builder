@@ -60,7 +60,7 @@ const (
 var (
 	// glog is a placeholder until the builders pass an output stream down
 	// client facing libraries should not be using glog
-	glog = utilglog.ToFile(os.Stderr, 2)
+	glog = utilglog.ToFile(os.Stderr, 5)
 
 	// InputContentPath is the path at which the build inputs will be available
 	// to all the build containers.
