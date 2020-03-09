@@ -5,6 +5,9 @@ const (
 	// AllowedUIDs is an environment variable that contains ranges of UIDs that are allowed in
 	// Source builder images
 	AllowedUIDs = "ALLOWED_UIDS"
+	// AddCapabilities is an environment variable that contains a list of capabilities to add when
+	// executing a Source build
+	AddCapabilities = "ADD_CAPS"
 	// DropCapabilities is an environment variable that contains a list of capabilities to drop when
 	// executing a Source build
 	DropCapabilities = "DROP_CAPS"

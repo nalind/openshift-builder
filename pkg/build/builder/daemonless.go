@@ -31,18 +31,24 @@ import (
 // The build controller doesn't expect the CAP_ prefix to be used in the
 // entries in the list in the environment, but our runtime configuration
 // expects it to be provided, so massage the values into a suitabe list.
-func dropCapabilities() []string {
-	var dropCapabilities []string
-	if dropCaps, ok := os.LookupEnv(builderutil.DropCapabilities); ok && dropCaps != "" {
-		dropCapabilities = strings.Split(os.Getenv(builderutil.DropCapabilities), ",")
-		for i := range dropCapabilities {
-			dropCapabilities[i] = strings.ToUpper(dropCapabilities[i])
-			if !strings.HasPrefix(dropCapabilities[i], "CAP_") {
-				dropCapabilities[i] = "CAP_" + dropCapabilities[i]
+func envCapabilitiesList(env string) []string {
+	var envCapabilities []string
+	if envCaps, ok := os.LookupEnv(env); ok && envCaps != "" {
+		envCapabilities = strings.Split(os.Getenv(env), ",")
+		for i := range envCapabilities {
+			envCapabilities[i] = strings.ToUpper(envCapabilities[i])
+			if !strings.HasPrefix(envCapabilities[i], "CAP_") {
+				envCapabilities[i] = "CAP_" + envCapabilities[i]
 			}
 		}
 	}
-	return dropCapabilities
+	return envCapabilities
+}
+func addCapabilities() []string {
+	return envCapabilitiesList(builderutil.AddCapabilities)
+}
+func dropCapabilities() []string {
+	return envCapabilitiesList(builderutil.DropCapabilities)
 }
 
 func pullDaemonlessImage(sc types.SystemContext, store storage.Store, imageName string, searchPaths []string, blobCacheDirectory string) error {
@@ -171,6 +177,7 @@ func buildDaemonlessImage(sc types.SystemContext, store storage.Store, isolation
 		RemoveIntermediateCtrs:  opts.RmTmpContainer,
 		ForceRmIntermediateCtrs: true,
 		BlobDirectory:           blobCacheDirectory,
+		AddCapabilities:         addCapabilities(),
 		DropCapabilities:        dropCapabilities(),
 	}
 
@@ -408,6 +415,7 @@ func daemonlessRun(ctx context.Context, store storage.Store, isolation buildah.I
 		Cmd:              createOpts.Config.Cmd,
 		Stdout:           attachOpts.OutputStream,
 		Stderr:           attachOpts.ErrorStream,
+		AddCapabilities:  addCapabilities(),
 		DropCapabilities: dropCapabilities(),
 	}
 

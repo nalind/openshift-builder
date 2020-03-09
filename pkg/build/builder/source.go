@@ -397,6 +397,7 @@ func extractSourceFromImage(ctx context.Context, dockerClient DockerClient, stor
 		PullPolicy:       pullPolicy,
 		ReportWriter:     os.Stdout,
 		SystemContext:    &systemContext,
+		AddCapabilities:  addCapabilities(),
 		DropCapabilities: dropCapabilities(),
 		CommonBuildOpts: &buildah.CommonBuildOptions{
 			HTTPProxy: true,
