@@ -41,6 +41,7 @@ const (
 	repoFile          = "redhat.repo"
 	subMgrCertDir     = "rhsm"
 	etcPkiEntitle     = "etc-pki-entitlement"
+	systemFIPS        = "system-fips"
 )
 
 var (
@@ -315,85 +316,38 @@ func buildDaemonlessImage(sc types.SystemContext, store storage.Store, isolation
 	return err
 }
 
+// override the contents of /run/secrets using a subset of what we were given
+// in the build pod's builder container
 func generateTransientMounts() []string {
-	mounts := []string{}
-	mounts = appendRHSMMount(defaultMountStart, mounts)
-	mounts = appendETCPKIMount(defaultMountStart, mounts)
-	mounts = appendRHRepoMount(defaultMountStart, mounts)
+	var mounts []string
+	tmpDir, err := ioutil.TempDir("/tmp", "secrets")
+	if err != nil {
+		log.V(4).Infof("Failed to create temporary directory for secrets: %v", err)
+		return nil
+	}
+	for secretName, quietlyIgnoreIfMissing := range map[string]bool{
+		subMgrCertDir: false,
+		etcPkiEntitle: false,
+		repoFile:      false,
+		systemFIPS:    true,
+	} {
+		src := filepath.Join(defaultMountStart, secretName)
+		dest := filepath.Join(tmpDir, secretName)
+		if _, err := os.Stat(src); err != nil {
+			if !quietlyIgnoreIfMissing {
+				log.V(4).Infof("Red Hat subscription content will not be available in this build: failed to stat %s: error %v", src, err)
+			}
+			continue
+		}
+		if err = s2ifs.NewFileSystem().Copy(src, dest, nil); err != nil {
+			log.V(0).Infof("Error copying %s to temporary secrets directory: %v", src, tmpDir, err)
+			return mounts
+		}
+	}
+	log.V(0).Infof("Adding transient rw bind mount for %s", tmpDir)
+	mounts = append(mounts, fmt.Sprintf("%s:/run/secrets:rw,nodev,noexec,nosuid", tmpDir))
 	mounts = appendCATrustMount(mounts)
 	return mounts
-}
-
-func appendRHRepoMount(pathStart string, mounts []string) []string {
-	path := filepath.Join(pathStart, repoFile)
-	st, err := os.Stat(path)
-	if err != nil {
-		// since the presence of the repo file is not a given, we won't log this a V(0)
-		log.V(4).Infof("Failed to stat %s, falling back to the Red Hat yum repository configuration in the build's base image. Error: %v", path, err)
-		return mounts
-	}
-	if !st.Mode().IsRegular() {
-		// if the file is there, but an unexpected type, then always have log show up via V(0)
-		log.V(0).Infof("Falling back to the Red Hat yum repository configuration in the build's base image: %s secrets location %s is a directory.", repoFile, path)
-		return mounts
-	}
-
-	// Add a bind of repo file, to pass along anything that the runtime mounted from the node
-	log.V(0).Infof("Adding transient rw bind mount for %s", path)
-	tmpDir, err := ioutil.TempDir("/tmp", repoFile+"-copy")
-	if err != nil {
-		log.V(0).Infof("Falling back to the Red Hat yum repository configuration in the base image: failed to create tmpdir for %s secret: %v", repoFile, err)
-		return mounts
-	}
-	fs := s2ifs.NewFileSystem()
-	err = fs.Copy(path, filepath.Join(tmpDir, repoFile), map[string]string{})
-	if err != nil {
-		log.V(0).Infof("Falling back to the Red Hat yum repository configuration in the base image: failed to copy %s secret: %v", repoFile, err)
-		return mounts
-	}
-	mounts = append(mounts, fmt.Sprintf("%s:/run/secrets/%s:rw,nodev,noexec,nosuid", filepath.Join(tmpDir, repoFile), repoFile))
-	return mounts
-}
-
-func coreAppendSecretLinksToDirs(pathStart, pathEnd string, mounts []string) []string {
-	path := filepath.Join(pathStart, pathEnd)
-	st, err := os.Stat(path)
-	if err != nil {
-		// since the presence of dir secret is not a given, we won't log this a V(0)
-		log.V(0).Infof("Red Hat subscription content will not be available in this build: failed to stat directory %s: %v", path, err)
-		return mounts
-	}
-	if !st.IsDir() && st.Mode()&os.ModeSymlink == 0 {
-		// if the file is there, but an unexpected type, then always have log show up via V(0)
-		log.V(0).Infof("Red Hat subscription content will not be available in this build: %s is not a directory", path)
-		return mounts
-	}
-
-	// Add a bind of dir secret, to pass along anything that the runtime mounted from the node
-	log.V(0).Infof("Adding transient rw bind mount for %s", path)
-	tmpDir, err := ioutil.TempDir("/tmp", pathEnd+"-copy")
-	if err != nil {
-		log.V(0).Infof("Red Hat subscription content will not be available in this build: failed to create tmpdir for %s secrets: %v", pathEnd, err)
-		return mounts
-	}
-	fs := s2ifs.NewFileSystem()
-	err = fs.CopyContents(path, tmpDir, map[string]string{})
-	if err != nil {
-		log.V(0).Infof("Red Hat subscription content will not be available in this build: failed to copy %s secrets: %v", pathEnd, err)
-		return mounts
-	}
-	mounts = append(mounts, fmt.Sprintf("%s:/run/secrets/%s:rw,nodev,noexec,nosuid", tmpDir, pathEnd))
-	return mounts
-	return mounts
-}
-
-func appendETCPKIMount(pathStart string, mounts []string) []string {
-	return coreAppendSecretLinksToDirs(pathStart, etcPkiEntitle, mounts)
-
-}
-
-func appendRHSMMount(pathStart string, mounts []string) []string {
-	return coreAppendSecretLinksToDirs(pathStart, subMgrCertDir, mounts)
 }
 
 func appendCATrustMount(mounts []string) []string {
