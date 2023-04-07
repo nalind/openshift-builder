@@ -17,7 +17,6 @@ import (
 	buildclientv1 "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/openshift/imagebuilder/dockerfile/parser"
-	s2iapi "github.com/openshift/source-to-image/pkg/api"
 
 	"github.com/openshift/builder/pkg/build/builder/cmd/dockercfg"
 	"github.com/openshift/builder/pkg/build/builder/timing"
@@ -33,17 +32,15 @@ type DockerBuilder struct {
 	dockerClient DockerClient
 	build        *buildapiv1.Build
 	client       buildclientv1.BuildInterface
-	cgLimits     *s2iapi.CGroupLimits
 	inputDir     string
 }
 
 // NewDockerBuilder creates a new instance of DockerBuilder
-func NewDockerBuilder(dockerClient DockerClient, buildsClient buildclientv1.BuildInterface, build *buildapiv1.Build, cgLimits *s2iapi.CGroupLimits) *DockerBuilder {
+func NewDockerBuilder(dockerClient DockerClient, buildsClient buildclientv1.BuildInterface, build *buildapiv1.Build) *DockerBuilder {
 	return &DockerBuilder{
 		dockerClient: dockerClient,
 		build:        build,
 		client:       buildsClient,
-		cgLimits:     cgLimits,
 		inputDir:     InputContentPath,
 	}
 }
@@ -329,16 +326,6 @@ func (d *DockerBuilder) dockerBuild(ctx context.Context, dir string, tag string)
 		Pull:                forcePull,
 		BuildArgs:           buildArgs,
 		ContextDir:          dir,
-	}
-
-	// Though we are capped on memory and cpu at the cgroup parent level,
-	// some build containers care what their memory limit is so they can
-	// adapt, thus we need to set the memory limit at the container level
-	// too, so that information is available to them.
-	if d.cgLimits != nil {
-		opts.Memory = d.cgLimits.MemoryLimitBytes
-		opts.Memswap = d.cgLimits.MemorySwap
-		opts.CgroupParent = d.cgLimits.Parent
 	}
 
 	if auth != nil {

@@ -77,19 +77,17 @@ type S2IBuilder struct {
 	dockerSocket string
 	build        *buildapiv1.Build
 	client       buildclientv1.BuildInterface
-	cgLimits     *s2iapi.CGroupLimits
 }
 
 // NewS2IBuilder creates a new STIBuilder instance
-func NewS2IBuilder(dockerClient DockerClient, dockerSocket string, buildsClient buildclientv1.BuildInterface, build *buildapiv1.Build,
-	cgLimits *s2iapi.CGroupLimits) *S2IBuilder {
+func NewS2IBuilder(dockerClient DockerClient, dockerSocket string, buildsClient buildclientv1.BuildInterface, build *buildapiv1.Build) *S2IBuilder {
 	// delegate to internal implementation passing default implementation of builderFactory and validator
-	return newS2IBuilder(dockerClient, dockerSocket, buildsClient, build, runtimeBuilderFactory{dockerClient}, runtimeConfigValidator{}, cgLimits)
+	return newS2IBuilder(dockerClient, dockerSocket, buildsClient, build, runtimeBuilderFactory{dockerClient}, runtimeConfigValidator{})
 }
 
 // newS2IBuilder is the internal factory function to create STIBuilder based on parameters. Used for testing.
 func newS2IBuilder(dockerClient DockerClient, dockerSocket string, buildsClient buildclientv1.BuildInterface, build *buildapiv1.Build,
-	builder builderFactory, validator validator, cgLimits *s2iapi.CGroupLimits) *S2IBuilder {
+	builder builderFactory, validator validator) *S2IBuilder {
 	// just create instance
 	return &S2IBuilder{
 		builder:      builder,
@@ -98,7 +96,6 @@ func newS2IBuilder(dockerClient DockerClient, dockerSocket string, buildsClient 
 		dockerSocket: dockerSocket,
 		build:        build,
 		client:       buildsClient,
-		cgLimits:     cgLimits,
 	}
 }
 
@@ -354,15 +351,6 @@ func (s *S2IBuilder) Build() error {
 		NoCache:             false,
 		Pull:                s.build.Spec.Strategy.SourceStrategy.ForcePull,
 		ContextDir:          "/tmp/dockercontext",
-	}
-
-	if s.cgLimits != nil {
-		opts.CPUPeriod = s.cgLimits.CPUPeriod
-		opts.CPUQuota = s.cgLimits.CPUQuota
-		opts.CPUShares = s.cgLimits.CPUShares
-		opts.Memory = s.cgLimits.MemoryLimitBytes
-		opts.Memswap = s.cgLimits.MemorySwap
-		opts.CgroupParent = s.cgLimits.Parent
 	}
 
 	pullAuthConfigs := s.setupPullSecret()

@@ -313,12 +313,10 @@ func buildDaemonlessImage(sc types.SystemContext, store storage.Store, isolation
 		SystemContext:    &systemContext,
 		NamespaceOptions: buildah.NamespaceOptions{
 			{Name: string(specs.NetworkNamespace), Host: true},
+			{Name: string(specs.CgroupNamespace), Host: true},
 		},
 		CommonBuildOpts: &buildah.CommonBuildOptions{
 			HTTPProxy:          true,
-			Memory:             opts.Memory,
-			MemorySwap:         opts.Memswap,
-			CgroupParent:       opts.CgroupParent,
 			Ulimit:             daemonlessProcessLimits(),
 			SeccompProfilePath: seccompProfilePath,
 		},
@@ -698,58 +696,6 @@ func inspectDaemonlessImage(sc types.SystemContext, store storage.Store, name st
 		RootFS:          rootfs,
 		OS:              oconfig.OS,
 	}, nil
-}
-
-// daemonlessRun mimics the 'docker run --rm' CLI command well enough. It creates and
-// starts a container and streams its logs. The container is removed after it terminates.
-func daemonlessRun(ctx context.Context, store storage.Store, isolation buildah.Isolation, ociRuntime string, createOpts docker.CreateContainerOptions, attachOpts docker.AttachToContainerOptions, blobCacheDirectory string) error {
-	if createOpts.Config == nil {
-		return fmt.Errorf("error calling daemonlessRun: expected a Config")
-	}
-	if createOpts.HostConfig == nil {
-		return fmt.Errorf("error calling daemonlessRun: expected a HostConfig")
-	}
-
-	builderOptions := buildah.BuilderOptions{
-		Container: createOpts.Name,
-		FromImage: createOpts.Config.Image,
-		CommonBuildOpts: &buildah.CommonBuildOptions{
-			HTTPProxy:    true,
-			Memory:       createOpts.HostConfig.Memory,
-			MemorySwap:   createOpts.HostConfig.MemorySwap,
-			CgroupParent: createOpts.HostConfig.CgroupParent,
-			Ulimit:       daemonlessProcessLimits(),
-		},
-		BlobDirectory:  blobCacheDirectory,
-		MaxPullRetries: DefaultPushOrPullRetryCount,
-		PullRetryDelay: DefaultPushOrPullRetryDelay,
-	}
-
-	builder, err := buildah.NewBuilder(ctx, store, builderOptions)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := builder.Delete(); err != nil {
-			log.V(0).Infof("Error deleting container %q(%s): %v", builder.Container, builder.ContainerID, err)
-		}
-	}()
-
-	entrypoint := createOpts.Config.Entrypoint
-	if len(entrypoint) == 0 {
-		entrypoint = builder.Entrypoint()
-	}
-	runOptions := buildah.RunOptions{
-		Isolation:        isolation,
-		Runtime:          ociRuntime,
-		Entrypoint:       entrypoint,
-		Cmd:              createOpts.Config.Cmd,
-		Stdout:           attachOpts.OutputStream,
-		Stderr:           attachOpts.ErrorStream,
-		DropCapabilities: dropCapabilities(),
-	}
-
-	return builder.Run(append(entrypoint, createOpts.Config.Cmd...), runOptions)
 }
 
 // DaemonlessClient is a daemonless DockerClient-like implementation.
